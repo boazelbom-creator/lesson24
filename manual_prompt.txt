@@ -1,0 +1,330 @@
+ODD EVEN tournament
+
+1. introduction
+We build 7 agents that will run on different terminals on the same PC and will communicate through http requests. The agent will represent several roles: 4 players, 2 referees, and 1 league manager who set the rules for the games. The agents that represent the same role will use similar agents with identical code but will run on different terminals, will have different id and will listen to different ports.
+You are going to be the league manager, responsible for preparing games plan and collecting games results. See detailed requirements below.
+You are going to be a referee, responsible for inviting players to the play, collect their moves and report the results to the league manager. See detailed requirements below.
+You are going to be a player, responsible for receiving an invitation to play, decides upon your move in the game and reports your move to the referee. See detailed requirements below.
+
+2. general requirements
+Nonfunctional requirements:
+•	Implement an AI agent using Python
+•	Use a virtual environment 
+•	Include logging and error handling 
+•	Make it modular.
+•	Code files should not exceed 150 lines each.
+General applicative requirements:
+•	Each player plays against the other 3 players, in 3 rounds.
+•	The game that the players play is called even_odd.
+•	Agent’s id will set by the league manager and sent to participant during his registration.
+•	Each agent will run on a different terminal.
+•	Each agent will implement http server on localhost, using FastAPI.
+•	Communication to and from agents will be done only via http requests, in peer-to-peer.
+•	Http requests will call post methods located in ./MCP.
+•	The format of the requests is JSON-RPC 2.0 format.
+•	At the end of the document, you will find the JSON formats for each message (request/response), each message needs some functionality to handle it, the needed functionality is described in the specific role requirements section under the same method name.
+•	The values in the JSONs are mostly fixed strings (surrounded by “”), except when you see the string xxxi (i is the remark number), in this case there is a remark after the JSON, explaining how to find the value for that key or value.
+ 
+3. specific role requirements
+
+league_manager requirements:
+You are the league manager responsible for conducting a tournament of games.
+Here is a list of your missions, described in the order of their execution:
+•	Listen to requests on port 8000 on localhost and answer client’s requests.
+•	Wait for referees to send you requests for registration and response to them with a random token and their id (REF01 for the first, REF02 for the second). Method name: register_referee.
+•	Wait for players to send you requests for registration and response to them with a random token and their id: (P01, P02, P03, P04). Method name: register_player.
+•	Keep requesters IP addresses to initiate farther requests to them later on.
+•	After each registration print the id that you gave to the requestor.
+•	After all referees and players have registered, prepare a game plan between the players, there will be 3 rounds of games, in each round you divide the 4 players into 2 couples and allocate a different referee for each couple,  the allocation of the players to the couple should be set according to the round-robin tournament format, that mean that in the end of the tournament every player will face all the other players in 3 rounds.
+•	Print the game plan you created, including the round number, the id of the players in each game and the referee that is attached to each game.
+•	For each round, send to each referee a request with the identity of the 2 players that will participate in the game that he is attached to on localhost:810i (i is the suffix of the referee id). Method name: start_match
+•	After sending the requests to the referees, wait for the referees to send you a request with the results of the match they were attached to, telling you how many points each one of the 2 players in the match got. Method name: report_match_result.
+•	Manage an internal score table of the results. After each round update summaries in the following way: add 1 to number of matches each player did, add the points each player got from the referee to each player total score, if a player get 3 points add 1 to number of his wins, if a player get 1 point add 1 to his number of draws, if a players got 0 points add 1 to the number of his loses. Create and update a table with the following columns: player id, the number of wins, the number of draws, the number of losses, the total score. In the table there will be a row for each player. The table will be ordered by the total number of points descending and then by the number of wins descending.
+•	Wait 1 minute between rounds.
+•	Print the score table in a table format after each round.
+•	After each round, send requests to all players with the updated score table. Method name: get_standings.
+
+ 
+Referee requirements:
+You are a referee in a league, responsible for conducting games, each game is between 2 players.
+Here is a list of your missions, the missions are performed sequentially:
+•	First, send a request to the league manager on localhost:8000 saying you are a referee and receive back a token (to be used later) and a referee id. Method_name: register_referee
+•	Listen to requests on port 800i (i is the suffix of your referee id).
+•	Wait for the league manager to send you a request to start a game giving you the identity of the 2 players that will participate in the game. Method name: start_match
+•	After receiving player’s identities, send an invitation to the game to these 2 players on localhost:810i (i is the suffix of each player id) and receive their approval. Method name: game_invitation.
+•	After receiving player’s approvals, send them a request asking them to send you their moves, on localhost:810i (i is the suffix of each player id). Method name: collect_choises.
+•	After the 2 players respond telling their moves (odd or even). Draw yourself a number between 1 and 10 and check if it is odd or even. Decide which player wins according to the following rules: if both sent an odd or if they both sent an even then it is a draw. Otherwise, the winning player is the one who sent you the same odd/even response as you draw, the other player is the loser. The player that won gets 3 points, the player who lost gets 0 points, if there was a draw, each player gets 1 point.
+•	After calculating the result of the game, send a request to the league manager on localhost:8000 saying how many points each player got. Method name: report_match_result.
+
+ 
+Player requirements:
+You are a player in a league, playing against the other 3 players, one at a time.
+Here is a list of your missions, the missions are performed sequentially:
+•	First, send a request to the league manager on localhost:8000 saying you are a player and receive back a token (to be used later) and a player id. Method name: register_player
+•	Listen to requests on port 810i (i is the suffix of your player id).
+•	A referee will send you a request with invitation to start a match, you will response with approval. Method name: game_invitation.
+•	After your approval, the referee will send you a request asking you to return a move. To find your move, draw a number between 1 and 10 and check if it is odd or even. Response to the referee’s request with the move you found (odd or even). Method name: collect_choice.
+•	Keep listening for more requests to perform game_invitation and collect_choices.
+•	Another request that might come includes the updated score table for all the players in the game. don’t do anything about it. Method name: get_standings.
+
+
+ 
+4. Messages formats in JSON:
+
+4.1 general prefix. Every message must include an envelope, that contains the following variables:
+{
+"protocol": "league.v2",
+"message_type": xxx1,
+"sender": xxx2
+"timestamp": xxx3
+"conversation_id": "convr1m1001",
+"auth_token": xxx4,
+"league_id": "league_2025_even_odd",
+}
+xxx1: the message type is detailed in the following specific request
+xxx2: the sender id (player id or referee id or league manager)
+xxx3: current date and time in ISO-8601 format
+xxx4: the token that the league manager sent in the registration request, it is 32 bytes long. 
+4.2 method name: register_referee
+request:
+{
+"message_type": "REFEREE_REGISTER_REQUEST",
+"referee_meta": {
+"display_name": "Referee Alpha",
+"version": "1.0.0",
+"game_types": ["even_odd"],
+"contact_endpoint": xxx1,
+"max_concurrent_matches": 2 }
+}
+xxx1: the referee IP address
+
+Response:
+{
+"message_type": "REFEREE_REGISTER_RESPONSE",
+"status": "ACCEPTED",
+"referee_id": xxx2,
+"reason": null
+} 
+xxx2: the referee id that was set by the league manager
+
+ 
+4.3 method name: register_player
+request:
+{
+"message_type": "PLAYER_REGISTER_REQUEST",
+"referee_meta": {
+"display_name": "Player Alpha",
+"version": "1.0.0",
+"game_types": ["even_odd"],
+"contact_endpoint": xxx1,
+"max_concurrent_matches": 2 }
+}
+xxx1: the player IP address
+
+Response:
+{
+"message_type": "PLAYER_REGISTER_RESPONSE",
+"status": "ACCEPTED",
+"referee_id": xxx2,
+"reason": null
+} 
+xxx2: the player id that was set by the league manager
+ 
+4.4 method name: start_match
+
+request:
+{
+"message_type": "ROUND_ANNOUNCEMENT",
+"league_id": "league_2025_even_odd",
+"round_id": xxx1,
+"matches": [
+{
+"match_id": "R1M1",
+"game_type": "even_odd",
+"player_A_id": xxx2,
+"player_B_id": xxx3,
+"referee_endpoint": "http://localhost:8001/mcp"
+}
+xxx1: the sequence number of the round (between 1 and 3)
+xxx2: the id of the first player (player_A)
+xxx3: the id of the second player (player_B)
+
+There is no response.
+ 
+4.5 method name: game_invitation
+
+request:
+{
+"message_type": "GAME_INVITATION",
+"league_id": "league_2025_even_odd",
+"round_id": xxx1,
+"match_id": "R1M1",
+"game_type": "even_odd",
+"role_in_match": "PLAYER",
+"opponent_id": xxx2,
+"conversation_id": "convr1m1001"
+}
+xxx1: the round sequence number received at the last start_match request
+xxx2: the player id of the other player in the match
+
+response:
+{
+"message_type": "GAME_JOIN_ACK",
+"match_id": "R1M1",
+"player_id": xxx3,
+"arrival_timestamp": xxx4,
+"accept": true
+}
+xxx3: your player id
+xxx4: current date and time in ISO-8601 format
+
+
+
+ 
+4.6 method name: collect_choice
+
+Request:
+{
+"message_type": "CHOOSE_PARITY_CALL",
+"match_id": "R1M1",
+"player_id": xxx1,
+"game_type": "even_odd",
+"context": {
+"opponent_id": xxx2,
+"round_id": xxx3,
+"your_standings": {
+"wins": 3,
+"losses": 1,
+"draws": 0}
+},
+"deadline": "20260115T10:30:30Z"
+}
+xxx1: the id of the player you send him the request
+xxx2: the id of the other player in the match
+xxx3: the round sequence number received at the last start_match request
+
+response:
+{
+"message_type": "CHOOSE_PARITY_RESPONSE",
+"match_id": "R1M1",
+"player_id": xxx4,
+"parity_choice": xxx5
+}
+xxx4: your player id
+xxx5: the move you calculate (odd or even)
+
+ 
+4.7 method name: report_match_result
+
+Request:
+{
+"message_type": "MATCH_RESULT_REPORT",
+"league_id": "league_2025_even_odd",
+"round_id": xxx1,
+"match_id": "R1M1",
+"game_type": "even_odd",
+"result": {
+"winner": xxx2,
+"score": {
+xxx3: xxx4,
+xxx5: xxx6},
+"details": {
+"drawn_number": 8,
+"choices": {
+"P01": "even",
+"P02": "odd"}
+}
+}
+}
+xxx1: the round sequence number received at the last start_match request
+xxx2: the player id of the player who won the match, if there was a draw the field is empty
+xxx3: the player id of the first player (player_A)
+xxx4: the number of points the first player got
+xxx5: the player id of the second player (player_B)
+xxx6: the number of points the second player got
+
+There is no response.
+ 
+4.8 method name: get_standing
+
+Request: 
+{
+"jsonrpc": "2.0",
+"method": "update_standings",
+"params": {
+"protocol": "league.v2",
+"message_type": "LEAGUE_STANDINGS_UPDATE",
+"sender": "league_manager",
+"timestamp": xxx1,
+"conversation_id": "convround1standings",
+"league_id": "league_2025_even_odd",
+"round_id": xxx2,
+"standings": [
+{
+"rank": 1,
+"player_id": xxx3,
+"display_name": "Agent Alpha",
+"played": xxx2,
+"wins": xxx4,
+"draws": xxx5,
+"losses": xxx6,
+"points": xxx7
+},
+{
+"rank": 2,
+"player_id": xxx8,
+"display_name": "Agent Gamma",
+"played": xxx2,
+"wins": xxx9,
+"draws": xxx10,
+"losses": xxx11,
+"points": xxx12
+},
+{
+"rank": 3,
+"player_id": xxx13,
+"display_name": "Agent Delta",
+"played": xxx2,
+"wins": xxx14,
+"draws": xxx15,
+"losses": xxx16,
+"points": xxx17
+},
+{
+"rank": 4,
+"player_id": xxx18,
+"display_name": "Agent Delta",
+"played": xxx2,
+"wins": xxx19,
+"draws": xxx20,
+"losses": xxx21,
+"points": xxx22]
+},
+}
+}
+
+xxx1: current date and time in ISO-8601 format
+xxx2: current sequence round number
+xxx3: the id of the first player on the table
+xxx4: number of wins for the first player on the table
+xxx5: number of draws for the first player on the table
+xxx6: number of losses for the first player on the table
+xxx7: the total score for the first player on the table
+xxx8: the id of the second player on the table
+xxx9: number of wins for the second player on the table
+xxx10: number of draws for the second player on the table
+xxx11: number of losses for the second player on the table
+xxx12: the total score for the second player on the table
+xxx13: the id of the third player on the table
+xxx14: number of wins for the third player on the table
+xxx15: number of draws for the third player on the table
+xxx16: number of losses for the third player on the table
+xxx17: the total score for the third player on the table
+xxx18: the id of the fourth player on the table
+xxx19: number of wins for the fourth player on the table
+xxx20: number of draws for the fourth player on the table
+xxx21: number of losses for the fourth player on the table
+xxx22: the total score for the fourth player on the table
+
+There is no response.
+
